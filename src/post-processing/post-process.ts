@@ -105,7 +105,27 @@ export function cleanTeamName(name: string): string | null {
     return null;
   }
 
-  // 11. Standardize to Title Case for consistent display
+  // 11. Standardize to Title Case for consistent display, but preserve known Apple OS names
+  // First, handle special Apple OS prefixes
+  const appleOSPattern = /^(iOS|macOS|tvOS|watchOS|iPadOS|visionOS)(\s|$)/i;
+  let preservedOS = '';
+  const osMatch = cleanedName.match(appleOSPattern);
+  if (osMatch) {
+    const osName = osMatch[1].toLowerCase();
+    // Map to correct casing
+    const osMap: Record<string, string> = {
+      'ios': 'iOS',
+      'macos': 'macOS',
+      'tvos': 'tvOS',
+      'watchos': 'watchOS',
+      'ipados': 'iPadOS',
+      'visionos': 'visionOS',
+    };
+    preservedOS = osMap[osName] || osMatch[1];
+    cleanedName = cleanedName.substring(osMatch[0].length);
+  }
+
+  // Apply title case to the rest
   cleanedName = cleanedName.replace(/\w\S*/g, (txt) => {
     // Don't modify acronyms (e.g., "SOC", "GPU")
     if (txt.toUpperCase() === txt) {
@@ -114,5 +134,10 @@ export function cleanTeamName(name: string): string | null {
     return txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase();
   });
 
-  return cleanedName;
+  // Prepend the preserved OS name
+  if (preservedOS) {
+    cleanedName = preservedOS + ' ' + cleanedName;
+  }
+
+  return cleanedName.trim();
 }

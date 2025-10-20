@@ -154,7 +154,14 @@ describe('cleanTeamName', () => {
 
     it('should handle mixed case correctly', () => {
       expect(cleanTeamName('iPhone Software Team')).toBe('Iphone Software');
-      expect(cleanTeamName('iOS Development')).toBe('Ios Development');
+      expect(cleanTeamName('iOS Development')).toBe('iOS Development'); // iOS preserved
+    });
+
+    it('should preserve Apple OS names correctly', () => {
+      expect(cleanTeamName('iOS Team')).toBe('iOS');
+      expect(cleanTeamName('macOS Engineering')).toBe('macOS Engineering');
+      expect(cleanTeamName('tvOS Platform')).toBe('tvOS Platform');
+      expect(cleanTeamName('watchOS Development')).toBe('watchOS Development');
     });
   });
 
