@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OrgTreeViewer } from './OrgTreeViewer';
 
@@ -245,6 +245,174 @@ describe('OrgTreeViewer', () => {
       render(<OrgTreeViewer orgData={longNameData} />);
 
       expect(screen.getByText(/This is a very long organization name/)).toBeInTheDocument();
+    });
+  });
+
+  describe('search functionality', () => {
+    it('should render search input', () => {
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      const searchInput = screen.getByPlaceholderText('Search organizations...');
+      expect(searchInput).toBeInTheDocument();
+    });
+
+    it('should filter nodes based on search term', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      const searchInput = screen.getByPlaceholderText('Search organizations...');
+
+      // Type search term
+      await user.type(searchInput, 'Frontend');
+
+      // Wait for debounce
+      await waitFor(() => {
+        expect(screen.getByText('Frontend')).toBeInTheDocument();
+      }, { timeout: 500 });
+
+      // Nodes that don't match should not be visible
+      expect(screen.queryByText('Design')).not.toBeInTheDocument();
+    });
+
+    it('should highlight matching text', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      const searchInput = screen.getByPlaceholderText('Search organizations...');
+      await user.type(searchInput, 'eng');
+
+      // Wait for debounce
+      await waitFor(() => {
+        const marks = screen.getAllByText((_content, element) =>
+          element?.tagName.toLowerCase() === 'mark'
+        );
+        expect(marks.length).toBeGreaterThan(0);
+      }, { timeout: 500 });
+    });
+
+    it('should auto-expand parent nodes when child matches', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      const searchInput = screen.getByPlaceholderText('Search organizations...');
+
+      // Initially, React Team should not be visible
+      expect(screen.queryByText('React Team')).not.toBeInTheDocument();
+
+      // Search for React Team
+      await user.type(searchInput, 'React');
+
+      // Wait for debounce and auto-expansion
+      await waitFor(() => {
+        // Text might be split by highlight marks, so use regex
+        expect(screen.getByText(/React/)).toBeInTheDocument();
+        expect(screen.getByText(/Team/)).toBeInTheDocument();
+        expect(screen.getByText('Engineering')).toBeInTheDocument();
+        expect(screen.getByText('Frontend')).toBeInTheDocument();
+      }, { timeout: 500 });
+    });
+
+    it('should show clear button when search has text', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      const searchInput = screen.getByPlaceholderText('Search organizations...');
+
+      // Initially no clear button
+      expect(screen.queryByLabelText('Clear search')).not.toBeInTheDocument();
+
+      // Type something
+      await user.type(searchInput, 'test');
+
+      // Clear button should appear
+      expect(screen.getByLabelText('Clear search')).toBeInTheDocument();
+    });
+
+    it('should clear search when clear button is clicked', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      const searchInput = screen.getByPlaceholderText('Search organizations...') as HTMLInputElement;
+
+      // Type something
+      await user.type(searchInput, 'Frontend');
+      expect(searchInput.value).toBe('Frontend');
+
+      // Click clear button
+      const clearButton = screen.getByLabelText('Clear search');
+      await user.click(clearButton);
+
+      // Input should be cleared
+      expect(searchInput.value).toBe('');
+    });
+
+    it('should show "no results" message when search has no matches', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      const searchInput = screen.getByPlaceholderText('Search organizations...');
+
+      // Search for something that doesn't exist
+      await user.type(searchInput, 'NonexistentOrg');
+
+      // Wait for debounce
+      await waitFor(() => {
+        expect(screen.getByText(/No organizations found matching/)).toBeInTheDocument();
+      }, { timeout: 500 });
+    });
+
+    it('should show result count when searching', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      const searchInput = screen.getByPlaceholderText('Search organizations...');
+
+      // Search for "Team"
+      await user.type(searchInput, 'Team');
+
+      // Wait for debounce
+      await waitFor(() => {
+        expect(screen.getByText(/Showing.*matching organization/)).toBeInTheDocument();
+      }, { timeout: 500 });
+    });
+
+    it('should handle case-insensitive search', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      const searchInput = screen.getByPlaceholderText('Search organizations...');
+
+      // Search with different case
+      await user.type(searchInput, 'ENGINEERING');
+
+      // Wait for debounce
+      await waitFor(() => {
+        expect(screen.getByText('Engineering')).toBeInTheDocument();
+      }, { timeout: 500 });
+    });
+
+    it('should preserve manually expanded nodes after search clear', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      // Manually expand Engineering
+      await user.click(screen.getByText('Engineering'));
+      expect(screen.getByText('Frontend')).toBeInTheDocument();
+
+      // Search for something
+      const searchInput = screen.getByPlaceholderText('Search organizations...');
+      await user.type(searchInput, 'Design');
+
+      await waitFor(() => {
+        expect(screen.queryByText('Frontend')).not.toBeInTheDocument();
+      }, { timeout: 500 });
+
+      // Clear search
+      const clearButton = screen.getByLabelText('Clear search');
+      await user.click(clearButton);
+
+      // Frontend should be collapsed after clear (state reset)
+      expect(screen.queryByText('Frontend')).not.toBeInTheDocument();
     });
   });
 });
