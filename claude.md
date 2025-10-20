@@ -1,0 +1,2 @@
+- Use IDE diagnostics to detect and fix issues - Reference prompt-engineering-playbook.md when refining prompts - Confirm test coverage after each implementation
+- Always use IDE diagnostics to validate and correct code
