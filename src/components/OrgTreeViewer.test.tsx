@@ -415,4 +415,137 @@ describe('OrgTreeViewer', () => {
       expect(screen.queryByText('Frontend')).not.toBeInTheDocument();
     });
   });
+
+  describe('sorting functionality', () => {
+    it('should render sort dropdown', () => {
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      const sortSelect = screen.getByLabelText('Sort by');
+      expect(sortSelect).toBeInTheDocument();
+    });
+
+    it('should have default sort option as "none"', () => {
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      const sortSelect = screen.getByLabelText('Sort by') as HTMLSelectElement;
+      expect(sortSelect.value).toBe('none');
+    });
+
+    it('should sort by name alphabetically', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      // Get initial order
+      const initialNodes = screen.getAllByText(/Engineering|Design/);
+      expect(initialNodes[0]).toHaveTextContent('Engineering');
+      expect(initialNodes[1]).toHaveTextContent('Design');
+
+      // Change to name sort
+      const sortSelect = screen.getByLabelText('Sort by');
+      await user.selectOptions(sortSelect, 'name');
+
+      // Should be alphabetically sorted
+      const sortedNodes = screen.getAllByText(/Engineering|Design/);
+      expect(sortedNodes[0]).toHaveTextContent('Design');
+      expect(sortedNodes[1]).toHaveTextContent('Engineering');
+    });
+
+    it('should sort by size (total descendant count)', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      // Change to size sort
+      const sortSelect = screen.getByLabelText('Sort by');
+      await user.selectOptions(sortSelect, 'size');
+
+      // Engineering has more descendants than Design, so should come first
+      const sortedNodes = screen.getAllByText(/Engineering|Design/);
+      expect(sortedNodes[0]).toHaveTextContent('Engineering');
+      expect(sortedNodes[1]).toHaveTextContent('Design');
+    });
+
+    it('should display size numbers when sorting by size', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      // Change to size sort
+      const sortSelect = screen.getByLabelText('Sort by');
+      await user.selectOptions(sortSelect, 'size');
+
+      // Size numbers should be visible
+      // Engineering has 5 total nodes (Engineering + Frontend + Backend + React Team + Vue Team + API Team)
+      const engineeringRow = screen.getByText('Engineering').closest('div');
+      expect(engineeringRow).toHaveTextContent('6'); // 1 + 2 children (Frontend, Backend) + 3 grandchildren (React, Vue, API)
+    });
+
+    it('should not display size numbers when not sorting by size', () => {
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      // With default sort (none), size shouldn't be shown
+      const engineeringRow = screen.getByText('Engineering').closest('div');
+      // Should only show child count (2), not total size
+      expect(engineeringRow).toHaveTextContent('2');
+      // Should not have the font-medium size indicator (which indicates total size)
+      const sizeElement = engineeringRow?.querySelector('.font-medium');
+      expect(sizeElement).not.toBeInTheDocument();
+    });
+
+    it('should sort children recursively when sorting by name', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      // Expand Engineering
+      await user.click(screen.getByText('Engineering'));
+
+      // Change to name sort
+      const sortSelect = screen.getByLabelText('Sort by');
+      await user.selectOptions(sortSelect, 'name');
+
+      // Children should also be sorted alphabetically
+      // Backend should come before Frontend
+      const childNodes = screen.getAllByText(/Frontend|Backend/);
+      expect(childNodes[0]).toHaveTextContent('Backend');
+      expect(childNodes[1]).toHaveTextContent('Frontend');
+    });
+
+    it('should maintain sort when searching', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      // Set sort to name
+      const sortSelect = screen.getByLabelText('Sort by');
+      await user.selectOptions(sortSelect, 'name');
+
+      // Search for "Team"
+      const searchInput = screen.getByPlaceholderText('Search organizations...');
+      await user.type(searchInput, 'Team');
+
+      // Wait for debounce
+      await waitFor(() => {
+        // Results should still be sorted by name
+        const nodes = screen.getAllByText(/Team/);
+        expect(nodes.length).toBeGreaterThan(0);
+      }, { timeout: 500 });
+    });
+
+    it('should reset to original order when selecting "none"', async () => {
+      const user = userEvent.setup();
+      render(<OrgTreeViewer orgData={mockOrgData} />);
+
+      // Change to name sort
+      const sortSelect = screen.getByLabelText('Sort by');
+      await user.selectOptions(sortSelect, 'name');
+
+      // Verify sorted
+      let nodes = screen.getAllByText(/Engineering|Design/);
+      expect(nodes[0]).toHaveTextContent('Design');
+
+      // Change back to none
+      await user.selectOptions(sortSelect, 'none');
+
+      // Should be back to original order
+      nodes = screen.getAllByText(/Engineering|Design/);
+      expect(nodes[0]).toHaveTextContent('Engineering');
+    });
+  });
 });

@@ -1,8 +1,10 @@
 import {useState, useMemo, useEffect} from 'react';
-import {ChevronRight, ChevronDown, Building2, Search, X} from 'lucide-react';
+import {ChevronRight, ChevronDown, Building2, Search, X, ArrowUpDown} from 'lucide-react';
 import {useDebounce} from '../hooks/useDebounce';
 
 type OrgNode = {[key: string]: OrgNode};
+
+export type SortOption = 'none' | 'size' | 'name';
 
 interface TreeNode {
   id: string;
@@ -94,6 +96,48 @@ function highlightMatch(text: string, searchTerm: string) {
   );
 }
 
+// Calculate total size (node count including all descendants)
+function calculateNodeSize(node: TreeNode): number {
+  let size = 1; // Count the node itself
+  for (const child of node.children) {
+    size += calculateNodeSize(child);
+  }
+  return size;
+}
+
+// Sort tree nodes based on sort option
+function sortTreeNodes(nodes: TreeNode[], sortBy: SortOption): TreeNode[] {
+  if (sortBy === 'none') {
+    return nodes;
+  }
+
+  const sorted = [...nodes];
+
+  if (sortBy === 'name') {
+    sorted.sort((a, b) => a.name.localeCompare(b.name));
+    // Recursively sort children
+    return sorted.map((node) => ({
+      ...node,
+      children: sortTreeNodes(node.children, sortBy),
+    }));
+  }
+
+  if (sortBy === 'size') {
+    sorted.sort((a, b) => {
+      const sizeA = calculateNodeSize(a);
+      const sizeB = calculateNodeSize(b);
+      return sizeB - sizeA; // Descending order (largest first)
+    });
+    // Recursively sort children
+    return sorted.map((node) => ({
+      ...node,
+      children: sortTreeNodes(node.children, sortBy),
+    }));
+  }
+
+  return sorted;
+}
+
 interface OrgTreeViewerProps {
   orgData: OrgNode;
   title?: string;
@@ -103,13 +147,14 @@ export function OrgTreeViewer({orgData, title = 'Organization Structure'}: OrgTr
   const treeNodes = useMemo(() => convertOrgToTreeNodes(orgData), [orgData]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('none');
   const debouncedSearch = useDebounce(searchTerm, 300);
 
-  // Filter nodes based on search
-  const filteredNodes = useMemo(
-    () => filterTreeNodes(treeNodes, debouncedSearch),
-    [treeNodes, debouncedSearch]
-  );
+  // Filter and sort nodes
+  const filteredAndSortedNodes = useMemo(() => {
+    const filtered = filterTreeNodes(treeNodes, debouncedSearch);
+    return sortTreeNodes(filtered, sortBy);
+  }, [treeNodes, debouncedSearch, sortBy]);
 
   // Auto-expand nodes when searching
   useEffect(() => {
@@ -140,6 +185,7 @@ export function OrgTreeViewer({orgData, title = 'Organization Structure'}: OrgTr
     const hasChildren = node.children.length > 0;
     const isExpanded = expandedIds.has(node.id);
     const paddingLeft = depth * 20;
+    const nodeSize = sortBy === 'size' ? calculateNodeSize(node) : null;
 
     return (
       <div key={node.id}>
@@ -170,9 +216,16 @@ export function OrgTreeViewer({orgData, title = 'Organization Structure'}: OrgTr
             {highlightMatch(node.name, debouncedSearch)}
           </span>
 
-          {hasChildren && (
-            <span className="ml-auto text-xs text-slate-400">{node.children.length}</span>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {sortBy === 'size' && nodeSize !== null && (
+              <span className="text-xs text-blue-600 font-medium" title="Total organization size">
+                {nodeSize}
+              </span>
+            )}
+            {hasChildren && (
+              <span className="text-xs text-slate-400">{node.children.length}</span>
+            )}
+          </div>
         </div>
 
         {hasChildren && isExpanded && (
@@ -192,38 +245,57 @@ export function OrgTreeViewer({orgData, title = 'Organization Structure'}: OrgTr
           </p>
         </div>
 
-        {/* Search Box */}
+        {/* Search and Sort Controls */}
         <div className="px-4 py-3 border-b border-slate-200">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search organizations..."
-              className="w-full pl-10 pr-10 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            {searchTerm && (
-              <button
-                onClick={clearSearch}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                aria-label="Clear search"
+          <div className="flex gap-3">
+            {/* Search Box */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search organizations..."
+                className="w-full pl-10 pr-10 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {searchTerm && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Sort Dropdown */}
+            <div className="relative">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="appearance-none pl-3 pr-8 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white cursor-pointer hover:border-slate-400 transition-colors"
+                aria-label="Sort by"
               >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+                <option value="none">Sort: None</option>
+                <option value="name">Sort: Name</option>
+                <option value="size">Sort: Size</option>
+              </select>
+              <ArrowUpDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
           </div>
+
           {debouncedSearch && (
             <p className="text-xs text-slate-500 mt-2">
-              {filteredNodes.length === 0
+              {filteredAndSortedNodes.length === 0
                 ? 'No results found'
-                : `Showing ${filteredNodes.length} matching organization${filteredNodes.length !== 1 ? 's' : ''}`}
+                : `Showing ${filteredAndSortedNodes.length} matching organization${filteredAndSortedNodes.length !== 1 ? 's' : ''}`}
             </p>
           )}
         </div>
 
         <div className="p-2 max-h-[600px] overflow-y-auto">
-          {filteredNodes.length === 0 && debouncedSearch ? (
+          {filteredAndSortedNodes.length === 0 && debouncedSearch ? (
             <div className="text-center py-8 text-slate-500">
               <p className="text-sm">No organizations found matching "{debouncedSearch}"</p>
               <button
@@ -234,7 +306,7 @@ export function OrgTreeViewer({orgData, title = 'Organization Structure'}: OrgTr
               </button>
             </div>
           ) : (
-            filteredNodes.map((node) => renderTreeNode(node))
+            filteredAndSortedNodes.map((node: TreeNode) => renderTreeNode(node))
           )}
         </div>
       </div>
