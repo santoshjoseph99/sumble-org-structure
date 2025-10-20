@@ -8,7 +8,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 py-8">
-      <OrgTreeViewer orgData={cleanedOrgData || {}} />
+      <OrgTreeViewer orgData={cleanedOrgData || {}} title="Apple Organization Structure" />
     </div>
   )
 }

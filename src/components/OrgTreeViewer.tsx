@@ -24,9 +24,10 @@ function convertOrgToTreeNodes(orgData: OrgNode, parentId: string = 'root'): Tre
 
 interface OrgTreeViewerProps {
   orgData: OrgNode;
+  title?: string;
 }
 
-export function OrgTreeViewer({orgData}: OrgTreeViewerProps) {
+export function OrgTreeViewer({orgData, title = 'Organization Structure'}: OrgTreeViewerProps) {
   const treeNodes = convertOrgToTreeNodes(orgData);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -90,7 +91,7 @@ export function OrgTreeViewer({orgData}: OrgTreeViewerProps) {
     <div className="w-full max-w-4xl mx-auto">
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm">
         <div className="border-b border-slate-200 px-4 py-3 bg-slate-50">
-          <h2 className="text-lg font-semibold text-slate-800">Apple Organization Structure</h2>
+          <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
           <p className="text-sm text-slate-600 mt-1">
             Click to expand and explore the organizational hierarchy
           </p>
