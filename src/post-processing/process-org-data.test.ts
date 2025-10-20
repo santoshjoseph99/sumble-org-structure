@@ -2,6 +2,81 @@ import { describe, it, expect } from 'vitest';
 import { processOrgData } from './process-org-data';
 
 describe('processOrgData', () => {
+  describe('prefix grouping', () => {
+    it('should group keys with common prefixes', () => {
+      const input = {
+        'AIML Infrastructure Teams': {},
+        'AIML Data Platform': {},
+        'AIML Engineering Efficiency': {},
+        'AIML Search Infrastructure': {},
+        'Design System': {},
+      };
+
+      const result = processOrgData(input);
+
+      // Should have AIML as a top-level group
+      expect(result).toHaveProperty('AIML');
+
+      // AIML should contain the suffixes as children
+      const aiml = result?.['AIML'];
+      expect(Object.keys(aiml || {})).toContain('Infrastructure Teams');
+      expect(Object.keys(aiml || {})).toContain('Data Platform');
+      expect(Object.keys(aiml || {})).toContain('Engineering Efficiency');
+      expect(Object.keys(aiml || {})).toContain('Search Infrastructure');
+
+      // Design System should remain at top level (not part of AIML group)
+      expect(result).toHaveProperty('Design System');
+    });
+
+    it('should only group when there are at least 3 items with common prefix', () => {
+      const input = {
+        'Frontend Development': {},
+        'Frontend Design': {},
+        'Backend Services': {},
+      };
+
+      const result = processOrgData(input);
+
+      // Should not create Frontend group (only 2 items)
+      expect(result).not.toHaveProperty('Frontend');
+      expect(result).toHaveProperty('Frontend Development');
+      expect(result).toHaveProperty('Frontend Design');
+    });
+
+    it('should handle AI/ML prefix variations', () => {
+      const input = {
+        'AI/ML End User Products PM': {},
+        'AI/ML Global Product Experience': {},
+        'AI/ML Instrumentation Platform': {},
+        'AI/ML Machine Learning Platform': {},
+      };
+
+      const result = processOrgData(input);
+
+      // Should group under AI/ML
+      expect(result).toHaveProperty('AI/ML');
+
+      const aiml = result?.['AI/ML'];
+      expect(Object.keys(aiml || {}).length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('should not group items with no common prefix', () => {
+      const input = {
+        'Engineering': {},
+        'Design': {},
+        'Product': {},
+      };
+
+      const result = processOrgData(input);
+
+      // Should remain ungrouped
+      expect(Object.keys(result || {})).toHaveLength(3);
+      expect(result).toHaveProperty('Engineering');
+      expect(result).toHaveProperty('Design');
+      expect(result).toHaveProperty('Product');
+    });
+  });
+
   describe('deduplication', () => {
     it('should merge similar keys with different punctuation', () => {
       const input = {
